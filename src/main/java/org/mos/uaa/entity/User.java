@@ -21,4 +21,6 @@ public class User {
 
     private Boolean isVerified = false;
 
+    private Boolean isRequiredChangePw = true;
+
 }

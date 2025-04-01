@@ -39,15 +39,31 @@ spring:
     consumer:
       group-id: otp-group
       auto-offset-reset: earliest
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+          spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+          spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+          spring.json.trusted.packages: org.mos.uaa.kafka
     producer:
       retries: 3
       acks: all
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
 
   data:
     redis:
       host: 192.168.147.128
       port: 6379
+
+  jackson:
+    default-property-inclusion: non_null
+
+  threads:
+    virtual:
+      enabled: true
+
+otp:
+  expired-time: 180
+  resend-delay: 120
+  max-attempt: 5

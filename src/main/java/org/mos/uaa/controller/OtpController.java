@@ -1,10 +1,12 @@
 package org.mos.uaa.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.mos.uaa.models.request.BaseTransOtpRequest;
 import org.mos.uaa.models.request.OtpValidationRequest;
+import org.mos.uaa.models.response.ApiResponse;
 import org.mos.uaa.service.OtpService;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -14,9 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class OtpController {
     private final OtpService otpService;
 
+    @PostMapping("/resend-otp")
+    public ApiResponse<?> resendOtp(@RequestBody BaseTransOtpRequest request) {
+        return this.otpService.resendOtp(request);
+    }
+
     @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(OtpValidationRequest request) {
-        return this.otpService.validate(request);
+    public ApiResponse<?> verifyOtp(OtpValidationRequest request) {
+        this.otpService.validateOtp(request);
+        return new ApiResponse<>("Yêu cầu thực hiện thành công");
     }
 
 }

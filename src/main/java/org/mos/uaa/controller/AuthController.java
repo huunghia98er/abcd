@@ -16,12 +16,12 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody @Valid RegisterRequest request) {
-        return this.authService.register(request);
+        return ResponseEntity.ok(this.authService.register(request));
     }
 
     @PutMapping("/change-password")
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
-        return this.authService.changePassword(request);
+        return ResponseEntity.ok(this.authService.changePassword(request));
     }
 
 }

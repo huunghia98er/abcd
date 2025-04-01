@@ -2,85 +2,86 @@ package org.mos.uaa.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.mos.uaa.constant.Constant;
+import org.mos.uaa.config.OtpProperties;
 import org.mos.uaa.entity.User;
+import org.mos.uaa.models.request.BaseTransOtpRequest;
 import org.mos.uaa.models.request.OtpValidationRequest;
+import org.mos.uaa.models.response.ApiResponse;
+import org.mos.uaa.redis.RegisterUserEntity;
+import org.mos.uaa.redis.repository.RegisterUserRepository;
+import org.mos.uaa.redis.service.RegisterUserService;
 import org.mos.uaa.repository.UserRepository;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OtpService {
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final RegisterUserRepository registerUserRepository;
+    private final RegisterUserService registerUserService;
     private final UserRepository userRepository;
+    private final OtpProperties otpProperties;
     private final Random random;
 
-    private static final int OTP_EXPIRED_TIME = 180;
-    private static final int OTP_RESEND_DELAY = 120;
-    private static final int OTP_MAX_ATTEMPTS = 5;
-
-    public String generateOtp(String phone) {
-        String otp = String.format("%06d", random.nextInt(999999));
-        redisTemplate.opsForValue().set(Constant.RedisKey.OTP + phone, otp, Duration.ofSeconds(OTP_EXPIRED_TIME));
-        redisTemplate.opsForValue().set(Constant.RedisKey.OTP_ATTEMPT + phone, "0", Duration.ofSeconds(OTP_EXPIRED_TIME));
-        redisTemplate.opsForValue().set(Constant.RedisKey.OTP_SEND_TIME_ + phone, LocalDateTime.now().toString(), Duration.ofSeconds(OTP_EXPIRED_TIME));
-        return otp;
+    public String generateOtp() {
+        return String.format("%06d", random.nextInt(999999));
     }
 
-    public ResponseEntity<?> validate(OtpValidationRequest request) {
-        String phone = request.getPhone().replace("+84", "84").replaceFirst("^0", "84");
+    public ApiResponse<?> resendOtp(BaseTransOtpRequest request) {
+        Optional<RegisterUserEntity> registerUserEntity = this.registerUserRepository.findById(request.getTransactionId());
 
-        if (!this.validateOtp(phone, request.getOtp())) {
-            return ResponseEntity.badRequest().body("OTP không hợp lệ hoặc đã hết hạn");
+        if (registerUserEntity.isEmpty()) {
+            throw new RuntimeException("Phiên làm việc không tồn tại hoặc đã hết hạn");
+        }
+
+        RegisterUserEntity entity = registerUserEntity.get();
+
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - entity.getOtpResendTime() < otpProperties.getResendDelay()) {
+            throw new RuntimeException("Vui lòng đợi " + otpProperties.getResendDelay() + " giây trước khi gửi lại OTP");
+        }
+        if (entity.getOtpResendCount() == otpProperties.getMaxAttempt()) {
+            registerUserRepository.deleteById(entity.getTransactionId());
+            throw new RuntimeException("Vượt quá số lần gửi lại OTP");
+        }
+
+        String otp = generateOtp();
+        entity.setOtp(otp);
+
+        registerUserService.renew(entity);
+
+        return new ApiResponse<>("OTP đã được gửi lại", request.getTransactionId());
+    }
+
+
+    public void validateOtp(OtpValidationRequest request) {
+        RegisterUserEntity entity = registerUserRepository.findById(request.getTransactionId())
+                .orElseThrow(() -> new RuntimeException("OTP đã hết hạn hoặc không tồn tại"));
+
+        if (!entity.getOtp().equals(request.getOtp())) {
+            incrementFailedAttempts(entity);
+            throw new RuntimeException("OTP không chính xác");
         }
 
         User user = new User();
-        user.setPhone(phone);
+        user.setPhone(entity.getPhoneNumber());
+        user.setPassword(String.format("%06d", random.nextInt(1_000_000)));
         userRepository.save(user);
-        return ResponseEntity.ok(user);
+
+        registerUserRepository.deleteById(request.getTransactionId());
     }
 
-    private boolean validateOtp(String phone, String otp) {
-        String storedOtp = String.valueOf(redisTemplate.opsForValue().get(Constant.RedisKey.OTP + phone));
-        if (storedOtp == null || !storedOtp.equals(otp)) {
-            incrementFailedAttempts(phone);
-            return false;
-        }
-        redisTemplate.delete(Constant.RedisKey.OTP + phone);
-        return true;
-    }
-
-    private void incrementFailedAttempts(String phone) {
-        String key = Constant.RedisKey.OTP_ATTEMPT + phone;
-
-        Object attemptsObj = redisTemplate.opsForValue().get(key);
-        Object sendTimeObj = redisTemplate.opsForValue().get(Constant.RedisKey.OTP_SEND_TIME_ + phone);
-
-        if (Objects.isNull(attemptsObj) || Objects.isNull(sendTimeObj)) {
-            throw new RuntimeException(Constant.Message.OTP_EXPIRATION);
-        }
-
-        LocalDateTime sendTime = LocalDateTime.parse(String.valueOf(sendTimeObj));
-
-        if (Duration.between(sendTime, LocalDateTime.now()).toSeconds() < OTP_RESEND_DELAY) {
-            throw new RuntimeException(String.format(Constant.Message.OTP_RESEND_DELAY, OTP_MAX_ATTEMPTS));
-        }
-
-        int attempts = Integer.parseInt(String.valueOf(attemptsObj));
-
-        if (attempts >= OTP_MAX_ATTEMPTS) {
-            redisTemplate.delete(Constant.RedisKey.OTP + phone);
-            redisTemplate.delete(key);
+    private void incrementFailedAttempts(RegisterUserEntity entity) {
+        int attempts = entity.getOtpFail() + 1;
+        if (attempts >= otpProperties.getMaxAttempt()) {
+            registerUserRepository.deleteById(entity.getTransactionId());
+            throw new RuntimeException("Vượt quá số lần nhập OTP");
         } else {
-            redisTemplate.opsForValue().increment(key);
+            entity.setOtpFail(attempts);
+            registerUserRepository.save(entity);
         }
     }
 

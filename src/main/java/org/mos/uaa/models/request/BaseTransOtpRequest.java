@@ -5,8 +5,6 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class OtpValidationRequest extends BaseTransOtpRequest {
-
-    private String otp;
-
+public class BaseTransOtpRequest {
+    private String transactionId;
 }
