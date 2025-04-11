@@ -20,7 +20,7 @@ public class AuthController {
     }
 
     @PutMapping("/change-password")
-    public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request) {
+    public ResponseEntity<?> changePassword(@RequestBody @Valid ChangePasswordRequest request) {
         return ResponseEntity.ok(this.authService.changePassword(request));
     }
 

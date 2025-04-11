@@ -49,6 +49,7 @@ public class AuthService {
 
     public ApiResponse<?> changePassword(ChangePasswordRequest request) {
         String phone = PhoneNumberUtils.normalizePhoneNumber(request.getPhone());
+
         Optional<User> userOptional = this.userRepository.findByPhone(phone);
 
         if (userOptional.isEmpty()) {

@@ -2,12 +2,14 @@ package org.mos.uaa.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "users")
+@NoArgsConstructor
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE)
@@ -23,4 +25,8 @@ public class User {
 
     private Boolean isRequiredChangePw = true;
 
+    public User(String phone, String password) {
+        this.phone = phone;
+        this.password = password;
+    }
 }

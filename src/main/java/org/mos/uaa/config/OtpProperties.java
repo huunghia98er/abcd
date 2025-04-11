@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ConfigurationProperties(prefix = "otp", ignoreUnknownFields = false)
 public class OtpProperties {
-    private long expiredTime;
-    private long maxAttempt;
-    private long resendDelay;
+    private int expiredTime;
+    private int maxAttempt;
+    private int resendDelay;
 }
